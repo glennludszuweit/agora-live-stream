@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <style>
+    #host {
+      width: 100%;
+      height: 800px;
+      margin: 10px;
+    }
+
+    #audience {
+      display: flex;
+    }
+  </style>
+
+  <body>
+    <h1>HOST:</h1>
+    <div id="host"></div>
+    <h1>AUDIENCE:</h1>
+    <button onclick="leaveStream()">Leave</button>
+    <div id="audience"></div>
+  </body>
+
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.3.0.js"></script>
+  <script>
+    const hostContainer = document.getElementById('host');
+    const audienceContainer = document.getElementById('audience');
+
+    const rtc = {
+      client: null,
+      localAudioTrack: null,
+      localVideoTrack: null,
+    };
+
+    const options = {
+      appId: '1b7ea0a481c94dafa4fd08a4f78076cc',
+      channel: 'TEST',
+      token: null,
+      role: 'audience',
+    };
+
+    //HOST
+    (async () => {
+      rtc.client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+
+      const uid = await rtc.client.join(
+        options.appId,
+        options.channel,
+        options.token,
+        null
+      );
+
+      // ((uid) => {
+      //   let localStream = AgoraRTC.localStream({
+      //     video: true,
+      //     adio: true,
+      //   });
+
+      //   localStream.init(() => {
+      //     localStream.play('host');
+      //     rtc.client.publish(localStream);
+      //   });
+      // })();
+
+      rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+      rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+      rtc.localVideoTrack.play('host');
+      rtc.localAudioTrack.play();
+      const localStream = await rtc.client.publish([
+        rtc.localAudioTrack,
+        rtc.localVideoTrack,
+      ]);
+
+      console.log(localStream);
+
+      console.log('publish success!');
+    })();
+
+    //AUDIENCE
+    const watchStream = () => {
+      rtc.client.on('user-published', async (user, mediaType) => {
+        await rtc.client.subscribe(user, mediaType);
+        console.log('subscribe success');
+
+        if (mediaType === 'video') {
+          const remoteVideoTrack = user.videoTrack;
+          const playerContainer = document.createElement('div');
+          playerContainer.id = user.uid.toString();
+          playerContainer.style.width = '320px';
+          playerContainer.style.height = '240px';
+          playerContainer.style.margin = '10px';
+          playerContainer.style.transform = 'rotateY(180deg)';
+          audienceContainer.appendChild(playerContainer);
+          remoteVideoTrack.play(playerContainer);
+        }
+
+        if (mediaType === 'audio') {
+          const remoteAudioTrack = user.audioTrack;
+          remoteAudioTrack.play();
+        }
+      });
+    };
+    watchStream();
+
+    const leaveStream = async () => {
+      rtc.localAudioTrack.close();
+      rtc.localVideoTrack.close();
+      rtc.client.remoteUsers.forEach((user) => {
+        const playerContainer = document.getElementById(user.uid);
+        playerContainer && playerContainer.remove();
+      });
+      await rtc.client.leave();
+    };
+  </script>
+</html>
